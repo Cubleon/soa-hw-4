@@ -1,0 +1,31 @@
+@startuml
+skinparam defaultFontName SansSerif
+skinparam maxMessageSize 190
+hide footbox
+autonumber
+title Вариант 2 — основной сценарий
+
+participant "Банковский сервис" as Source
+participant "Сервис приёма" as Intake
+database "БД уведомлений" as DB
+participant "Temporal" as Temporal
+participant "Delivery Worker" as Worker
+participant "Push-провайдер" as Push
+actor "Клиент / приложение" as Client
+
+Source -> Intake: Событие из outbox, бизнес-ключ
+Intake -> DB: Уведомление и задание запуска, commit
+Intake --> Source: Принято
+Intake -> Temporal: Запустить workflow из outbox, ID уведомления
+Temporal -> Worker: Задача workflow / Activity отправки
+Worker -> DB: Проверить статус, сохранить попытку push
+Worker -> Push: Отправить с attempt_id
+Push --> Worker: Принято провайдером
+Worker -> Temporal: Результат Activity; ждать ACK или таймер
+Push -> Client: Доставить push
+Client -> Worker: ACK о получении
+Worker -> DB: DELIVERED, журнал и outbox-сигнал
+Worker -> Temporal: Передать сигнал из outbox
+Temporal -> Worker: Задача workflow: доставка подтверждена
+Worker -> Temporal: Завершить workflow
+@enduml

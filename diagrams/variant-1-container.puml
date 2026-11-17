@@ -1,0 +1,31 @@
+@startuml
+!include <C4/C4_Container>
+LAYOUT_TOP_DOWN()
+skinparam defaultFontName SansSerif
+title Вариант 1 — C4 Container: Kafka и PostgreSQL
+
+System_Ext(source, "Банковские сервисы", "Операции и outbox")
+System_Ext(profile, "Профиль клиента", "Контакты и настройки")
+System_Ext(providers, "Провайдеры каналов", "Push, SMS, email")
+Person(client, "Клиент")
+
+System_Boundary(platform, "Notification Platform — критичная доставка") {
+  Container(intake, "Сервис приёма", "Go", "Сохранение уведомления и публикация из outbox")
+  Container(queue, "Очередь критичных сообщений", "Apache Kafka", "Буфер задач доставки")
+  Container(delivery, "Сервис доставки", "Go", "Выбор канала, таймеры, попытки и подтверждения")
+  ContainerDb(db, "БД уведомлений", "PostgreSQL", "Сообщения, outbox, попытки, сроки и статусы")
+}
+
+Rel(source, intake, "Передаёт событие", "HTTPS")
+Rel(intake, db, "Сохраняет уведомление и outbox", "SQL")
+Rel(intake, queue, "Публикует задачу", "Kafka protocol")
+Rel(queue, delivery, "Передаёт задачу", "Kafka protocol")
+Rel(delivery, db, "Читает сроки, сохраняет попытки и результат", "SQL")
+Rel(delivery, profile, "Читает настройки", "HTTPS")
+Rel(delivery, providers, "Отправляет / проверяет статус", "HTTPS")
+Rel(providers, delivery, "Подтверждает доставку", "HTTPS callback")
+Rel(providers, client, "Доставка")
+Rel(client, delivery, "Приложение подтверждает push", "HTTPS ACK")
+
+SHOW_LEGEND()
+@enduml

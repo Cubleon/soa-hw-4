@@ -1,0 +1,28 @@
+@startuml
+skinparam defaultFontName SansSerif
+skinparam maxMessageSize 190
+hide footbox
+autonumber
+title Вариант 1 — основной сценарий
+
+participant "Банковский сервис" as Source
+participant "Сервис приёма" as Intake
+database "PostgreSQL" as DB
+queue "Kafka" as Kafka
+participant "Сервис доставки" as Delivery
+participant "Push-провайдер" as Push
+actor "Клиент / приложение" as Client
+
+Source -> Intake: Событие из outbox, бизнес-ключ
+Intake -> DB: Сохранить уведомление и outbox
+DB --> Intake: Commit
+Intake --> Source: Принято
+Intake -> Kafka: Опубликовать задачу из outbox
+Kafka -> Delivery: Задача доставки
+Delivery -> DB: Сохранить попытку push и срок ожидания
+Delivery -> Push: Отправить с attempt_id
+Push --> Delivery: Принято провайдером
+Push -> Client: Доставить push
+Client -> Delivery: ACK о получении
+Delivery -> DB: DELIVERED, журнал, отмена неначатых отправок
+@enduml

@@ -1,0 +1,34 @@
+@startuml
+skinparam defaultFontName SansSerif
+skinparam maxMessageSize 190
+hide footbox
+autonumber
+title Вариант 2 — failover между каналами
+
+participant "Temporal" as Temporal
+participant "Delivery Worker" as Worker
+database "БД уведомлений" as DB
+participant "SMS-провайдер" as SMS
+participant "Email-провайдер" as Email
+
+note over Temporal,DB: Push уже отправлен, но ACK нет
+Temporal -> Worker: Таймер 4 с: перейти на резерв
+Worker -> DB: Проверить статус, сохранить попытку SMS
+Worker -> SMS: Отправить с attempt_id, до 5 с от приёма
+SMS --> Worker: Принято провайдером
+Worker -> Temporal: Ждать подтверждение или следующий таймер
+alt SMS доставлена
+  SMS -> Worker: Delivery report: DELIVERED
+  Worker -> DB: DELIVERED, журнал и outbox-сигнал
+  Worker -> Temporal: Подтверждение из outbox; завершить workflow
+else SMS отказала или не подтверждена к сроку
+  Temporal -> Worker: Следующий шаг маршрута
+  Worker -> SMS: Проверить статус
+  Worker -> DB: Если не доставлено, сохранить попытку email
+  Worker -> Email: Отправить до 22 с от приёма
+  Email -> Worker: Письмо принято сервером получателя
+  Worker -> DB: DELIVERED, журнал и outbox-сигнал
+  Worker -> Temporal: Подтверждение из outbox; завершить workflow
+end
+note over Worker,DB: Повтор Activity использует прежний attempt_id и проверку статуса
+@enduml

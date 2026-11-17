@@ -1,0 +1,32 @@
+@startuml
+skinparam defaultFontName SansSerif
+skinparam maxMessageSize 190
+hide footbox
+autonumber
+title Вариант 1 — failover между каналами
+
+participant "Сервис доставки" as Delivery
+database "PostgreSQL" as DB
+participant "SMS-провайдер" as SMS
+participant "Email-провайдер" as Email
+
+note over Delivery,DB: Push уже отправлен, но ACK нет
+Delivery -> DB: Через 4 с проверить статус и подтверждения
+Delivery -> DB: Если не доставлено, сохранить попытку SMS
+Delivery -> SMS: Отправить с attempt_id, до 5 с от приёма
+SMS --> Delivery: Принято провайдером
+alt SMS доставлена
+  SMS -> Delivery: Delivery report: DELIVERED
+  Delivery -> DB: DELIVERED, журнал
+else SMS отказала или не подтверждена к сроку
+  Delivery -> SMS: Проверить статус
+  Delivery -> DB: Если не доставлено, сохранить попытку email
+  Delivery -> Email: Отправить до 22 с от приёма
+  Email -> Delivery: Письмо принято сервером получателя
+  Delivery -> DB: DELIVERED, журнал
+end
+note over Delivery,DB
+  Позднее подтверждение останавливает ещё не начатые отправки.
+  Уже начатый внешний запрос гарантированно отменить нельзя.
+end note
+@enduml

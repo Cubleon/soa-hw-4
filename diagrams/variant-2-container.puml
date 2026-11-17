@@ -1,0 +1,34 @@
+@startuml
+!include <C4/C4_Container>
+LAYOUT_TOP_DOWN()
+skinparam defaultFontName SansSerif
+title Вариант 2 — C4 Container: Temporal
+
+System_Ext(source, "Банковские сервисы", "Операции и outbox")
+System_Ext(profile, "Профиль клиента", "Контакты и настройки")
+System_Ext(providers, "Провайдеры каналов", "Push, SMS, email")
+Person(client, "Клиент")
+
+System_Boundary(platform, "Notification Platform — критичная доставка") {
+  Container(intake, "Сервис приёма", "Go", "Сохранение уведомления и задание запуска workflow")
+  Container(temporal, "Temporal Server", "Temporal", "Очереди задач, история процесса и таймеры")
+  Container(worker, "Delivery Worker", "Go + Temporal SDK", "Workflow, Activity каналов и обработка подтверждений")
+  ContainerDb(db, "БД уведомлений", "PostgreSQL", "Сообщения, outbox, попытки и статусы")
+  ContainerDb(history, "БД Temporal", "PostgreSQL", "Устойчивое состояние выполнения")
+}
+
+Rel(source, intake, "Передаёт событие", "HTTPS")
+Rel(intake, db, "Сохраняет уведомление и задание запуска", "SQL")
+Rel(intake, temporal, "Запускает workflow из outbox", "gRPC")
+Rel(temporal, history, "Сохраняет выполнение", "SQL")
+Rel(temporal, worker, "Выдаёт задачи и таймеры", "gRPC")
+Rel(worker, temporal, "Передаёт результаты и сигналы", "gRPC")
+Rel(worker, db, "Сохраняет попытки и подтверждения", "SQL")
+Rel(worker, profile, "Читает настройки", "HTTPS")
+Rel(worker, providers, "Отправляет / проверяет статус", "HTTPS")
+Rel(providers, worker, "Подтверждает доставку", "HTTPS callback")
+Rel(providers, client, "Доставка")
+Rel(client, worker, "Приложение подтверждает push", "HTTPS ACK")
+
+SHOW_LEGEND()
+@enduml
